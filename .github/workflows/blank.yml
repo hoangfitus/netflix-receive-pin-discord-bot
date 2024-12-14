@@ -1,0 +1,55 @@
+name: Deploy Discord Bot
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push events to the "main" branch
+  push:
+    branches: [ "main" ]
+
+  # Scheduled times
+  schedule:
+    - cron: '0 0 * * *'  # Lúc 0h
+    - cron: '0 3 * * *'  # Lúc 3h
+    # Chạy từ 6h đến 12h (06:00 - 12:00)
+    - cron: '0 6 * * *'  # Lúc 6h
+    - cron: '0 9 * * *'  # Lúc 9h
+    # Chạy từ 12h đến 18h (12:00 - 18:00)
+    - cron: '0 12 * * *' # Lúc 12h
+    - cron: '0 15 * * *' # Lúc 15h
+    # Chạy từ 18h đến 24h (18:00 - 24:00)
+    - cron: '0 18 * * *' # Lúc 18h
+    - cron: '0 21 * * *' # Lúc 21h
+
+  # Allows manual trigger from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  deploy-bot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 hours
+    concurrency:
+      group: ${{ github.ref }}
+      cancel-in-progress: false
+
+    steps:
+      # Check out the repository
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      # Install dependencies
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Deploy the bot
+      - name: Deploy bot
+        run: |
+          python bot.py &
+          sleep 21600  # Sleep for 6 hours (21600 seconds)
+        env:
+          TOKEN: ${{ secrets.TOKEN }}
