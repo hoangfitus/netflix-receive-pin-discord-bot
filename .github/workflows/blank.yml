@@ -53,5 +53,5 @@ jobs:
           sleep 21600  # Sleep for 6 hours (21600 seconds)
         env:
           TOKEN: ${{ secrets.TOKEN }}
-          EMAIL: ${{ secrets.EMAIL ]}
+          EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
