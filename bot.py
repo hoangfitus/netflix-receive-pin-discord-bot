@@ -17,6 +17,7 @@ VERIFY_LINK_REGEX = re.compile(
     r"\[(https://www\.netflix\.com/account/travel/verify[^\]]*)\]"
 )
 
+print(EMAIL,"--", TOKEN)
 
 def get_verify_link():
     mail = imaplib.IMAP4_SSL(SERVER)
