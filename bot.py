@@ -308,67 +308,102 @@ async def get_sign_in_code() -> Optional[Tuple[str, bool, str]]:
     """Get sign in code from Netflix email with expiry check
     Returns: (code, is_expired, expiry_message) or None
     """
+    logger.debug("Starting sign in code retrieval")
     try:
-        result = await get_netflix_emails("Mã đăng nhập")
+        # Get the latest email subjects to find one with sign-in code
+        recent_subjects = await get_recent_email_subjects(count=10)
+        logger.debug(f"Retrieved {len(recent_subjects)} recent email subjects")
 
-        if not result:
-            logger.warning("No email content found for sign in code")
+        if not recent_subjects:
+            logger.warning("No recent Netflix emails found")
             return None
 
-        content, email_date_str = result
-        print(
-            f"DEBUG - Email content: {content[:500]}..."
-        )  # DEBUG: Print first 500 chars for debugging
+        # Keywords to match in subject for sign-in codes
+        sign_in_keywords = ["mã đăng nhập", "sign-in code"]
 
-        # Parse email date for expiry checking
-        email_date = parse_email_date(email_date_str) if email_date_str else None
-
-        found_code = None
-        pattern_used = ""
-
-        match = SIGN_IN_CODE_REGEX.search(content)
-        if match:
-            found_code = match.group(1)
-            pattern_used = "main regex"
-            logger.info(f"Sign in code found: {found_code}")
-        else:
-            logger.warning("No sign in code found in email content")
-
-            # Try alternative patterns for Vietnamese format
-            # Look for standalone 4-8 digit numbers after Vietnamese login text
-            vietnamese_pattern = re.search(
-                r"nhập mã này để đăng nhập[\s\n]+nhập mã này để đăng nhập[\s\n]+(\d{4,8})",
-                content,
-                re.IGNORECASE | re.MULTILINE,
+        # Look for an email with sign-in code keywords (iterate from newest to oldest)
+        for email_subject in recent_subjects:
+            subject_lower = email_subject.lower()
+            has_sign_in_keyword = any(
+                keyword.lower() in subject_lower for keyword in sign_in_keywords
             )
-            if vietnamese_pattern:
-                found_code = vietnamese_pattern.group(1)
-                pattern_used = "Vietnamese pattern"
-                logger.info(f"Vietnamese pattern found code: {found_code}")
-            else:
-                # Try simple standalone number pattern
-                simple_code_match = re.search(
-                    r"^\s*(\d{4,8})\s*$", content, re.MULTILINE
-                )
-                if simple_code_match:
-                    found_code = simple_code_match.group(1)
-                    pattern_used = "simple pattern"
-                    logger.info(f"Simple pattern found code: {found_code}")
-                else:
-                    # Last resort: any 4-8 digit number
-                    fallback_match = re.search(r"\b(\d{4,8})\b", content)
-                    if fallback_match:
-                        found_code = fallback_match.group(1)
-                        pattern_used = "fallback pattern"
-                        logger.info(f"Fallback pattern found code: {found_code}")
 
-        if found_code:
-            # Check expiry
-            is_expired, expiry_msg = is_code_expired(email_date)
-            logger.info(f"Code {found_code} expiry check: {expiry_msg}")
-            return found_code, is_expired, expiry_msg
-        else:
-            return None
+            if not has_sign_in_keyword:
+                logger.debug(
+                    f"Subject '{email_subject}' does not contain sign-in code keywords"
+                )
+                continue
+
+            logger.debug(f"Found matching subject: {email_subject}")
+            # Use the first keyword that matches for the search
+            matching_keyword = next(
+                kw for kw in sign_in_keywords if kw.lower() in subject_lower
+            )
+            result = await get_netflix_emails(matching_keyword)
+
+            if not result:
+                logger.debug(f"No email content found for subject: {email_subject}")
+                continue
+
+            content, email_date_str = result
+            logger.debug(
+                f"Email content received for subject '{email_subject}', length: {len(content)}"
+            )
+            print(
+                f"DEBUG - Email content for '{email_subject}': {content[:500]}..."
+            )  # DEBUG: Print first 500 chars for debugging
+
+            # Parse email date for expiry checking
+            email_date = parse_email_date(email_date_str) if email_date_str else None
+
+            found_code = None
+
+            match = SIGN_IN_CODE_REGEX.search(content)
+            logger.debug("Searching for sign in code using SIGN_IN_CODE_REGEX")
+            logger.debug(f"Sign in code regex match: {match}")
+            if match:
+                found_code = match.group(1)
+                logger.info(f"Sign in code found: {found_code}")
+            else:
+                logger.warning("No sign in code found in email content")
+                logger.debug("Email content does not match sign in code pattern")
+
+                # Try alternative patterns for Vietnamese format
+                # Look for standalone 4-8 digit numbers after Vietnamese login text
+                vietnamese_pattern = re.search(
+                    r"nhập mã này để đăng nhập[\s\n]+nhập mã này để đăng nhập[\s\n]+(\d{4,8})",
+                    content,
+                    re.IGNORECASE | re.MULTILINE,
+                )
+                if vietnamese_pattern:
+                    found_code = vietnamese_pattern.group(1)
+                    pattern_used = "Vietnamese pattern"
+                    logger.info(f"Vietnamese pattern found code: {found_code}")
+                else:
+                    # Try simple standalone number pattern
+                    simple_code_match = re.search(
+                        r"^\s*(\d{4,8})\s*$", content, re.MULTILINE
+                    )
+                    if simple_code_match:
+                        found_code = simple_code_match.group(1)
+                        pattern_used = "simple pattern"
+                        logger.info(f"Simple pattern found code: {found_code}")
+                    else:
+                        # Last resort: any 4-8 digit number
+                        fallback_match = re.search(r"\b(\d{4,8})\b", content)
+                        if fallback_match:
+                            found_code = fallback_match.group(1)
+                            pattern_used = "fallback pattern"
+                            logger.info(f"Fallback pattern found code: {found_code}")
+
+            if found_code:
+                # Check expiry
+                is_expired, expiry_msg = is_code_expired(email_date)
+                logger.info(f"Code {found_code} expiry check: {expiry_msg}")
+                return found_code, is_expired, expiry_msg
+
+        logger.warning("No sign in code found in any Netflix emails")
+        return None
 
     except Exception as e:
         logger.error(f"Error in get_sign_in_code: {e}")
